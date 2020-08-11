@@ -21,7 +21,8 @@ CREATE TABLE "employees" (
 CREATE TABLE "salaries" (
     "emp_no" int NOT NULL,
     "salary" int   NOT NULL,
-	FOREIGN KEY (emp_no) REFERENCES employees(emp_no)
+	FOREIGN KEY (emp_no) REFERENCES employees(emp_no),
+	PRIMARY KEY (emp_no)
 );
 
 CREATE TABLE "departments" (
