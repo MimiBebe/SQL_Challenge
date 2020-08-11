@@ -1,47 +1,50 @@
 -- Create tables in this order
-
+-- CONSTRAINT "pk_titles" PRIMARY KEY ("title_id")
 CREATE TABLE "titles" (
     "title_id" varchar(255)   NOT NULL,
     "title" varchar(255)   NOT NULL,
-    CONSTRAINT "pk_titles" PRIMARY KEY (
-        "title_id"
-     )
+	PRIMARY KEY (title_id)
 );
 
 CREATE TABLE "employees" (
     "emp_no" int   NOT NULL,
-    "emp_title" varchar(255)   NOT NULL references titles(title_id),
+    "emp_title" varchar(255)   NOT NULL,
     "birth_date" Date   NOT NULL,
     "first_name" varchar(255)   NOT NULL,
     "last_name" varchar(255)   NOT NULL,
     "sex" char(1)   NOT NULL,
     "hire_date" Date   NOT NULL,
-    CONSTRAINT "pk_employees" PRIMARY KEY (
-        "emp_no"
-     )
+	PRIMARY KEY (emp_no),
+	FOREIGN KEY (emp_title) REFERENCES titles(title_id)
 );
 
 CREATE TABLE "salaries" (
-    "emp_no" int NOT NULL references employees(emp_no),
-    "salary" int   NOT NULL
+    "emp_no" int NOT NULL,
+    "salary" int   NOT NULL,
+	FOREIGN KEY (emp_no) REFERENCES employees(emp_no)
 );
 
 CREATE TABLE "departments" (
     "dept_no" varchar(255)   NOT NULL,
     "dept_name" varchar(255)   NOT NULL,
-    CONSTRAINT "pk_departments" PRIMARY KEY (
-        "dept_no"
-     )
+	PRIMARY KEY (dept_no),
+	UNIQUE(dept_name)
 );
 
 CREATE TABLE "dept_emp" (
-    "emp_no" int  NOT NULL references employees(emp_no),
-    "dept_no" varchar(255)  NOT NULL references departments(dept_no)
+    "emp_no" int  NOT NULL,
+    "dept_no" varchar(255)  NOT NULL,
+	FOREIGN KEY (emp_no) REFERENCES employees(emp_no),
+	FOREIGN KEY (dept_no) REFERENCES departments(dept_no),
+	PRIMARY KEY (emp_no,dept_no)	
 );
 
 CREATE TABLE "dept_manager" (
-    "dept_no" varchar(255)  NOT NULL references departments(dept_no),
-    "emp_no" int NOT NULL references employees(emp_no)
+    "dept_no" varchar(255)  NOT NULL,
+    "emp_no" int NOT NULL,
+	FOREIGN KEY (dept_no) REFERENCES departments(dept_no),
+	FOREIGN KEY (emp_no) REFERENCES employees(emp_no),
+	PRIMARY KEY (dept_no,emp_no)
 );
 
 -- import in this order
@@ -63,7 +66,7 @@ WHERE emp_no IN (SELECT emp_no
 
 -- check for duplicates in dept_emp
 -- MANY duplicates: same emp_no for different dept_no
--- Employee switches departments?
+-- Employee switches departments or an employee works in multiple departments
 SELECT *
 FROM dept_emp
 WHERE emp_no IN (SELECT emp_no 
@@ -73,16 +76,16 @@ WHERE emp_no IN (SELECT emp_no
 
 -- 1. List the following details of each employee: employee number, last name, first name, sex, and salary
 SELECT
-	employees.emp_no,
-	first_name,
-	last_name,
-	sex,
-	salary
+	Em.emp_no,
+	Em.first_name,
+	Em.last_name,
+	Em.sex,
+	Sa.salary
 FROM
-	employees
-INNER JOIN salaries 
-    ON employees.emp_no = salaries.emp_no
-ORDER BY emp_no;
+	employees as Em
+INNER JOIN salaries as Sa 
+    ON Em.emp_no = Sa.emp_no
+ORDER BY Em.emp_no;
 
 -- 2. List first name, last name, and hire date for employees who were hired in 1986.
 SELECT 
@@ -94,24 +97,25 @@ WHERE EXTRACT(YEAR FROM hire_date) = 1986;
 -- or WHERE hire_date BETWEEN '1986-01-01' AND '1986-12-31'
 
 -- 3. List the manager of each department with the following information: department number, department name, the manager's employee number, last name, first name.
+-- with aliasing
 SELECT
-	departments.dept_no,
-	dept_name,
-	dept_manager.emp_no,
-	last_name,
-	first_name
+	De.dept_no,
+	De.dept_name,
+	De_ma.emp_no,
+	Em.last_name,
+	Em.first_name
 	
 FROM
-    dept_manager
-    INNER JOIN departments ON dept_manager.dept = departments.dept_no
-    INNER JOIN employees ON dept_manager.emp_no = employees.emp_no
+    dept_manager as De_ma
+    INNER JOIN departments AS De ON (De_ma.dept_no = DE.dept_no)
+    INNER JOIN employees AS Em ON (De_ma.emp_no = Em.emp_no)
 
-ORDER BY emp_no;
+ORDER BY Em.emp_no;
 
 -- 4. List the department of each employee with the following information: employee number, last name, first name, and department name.
--- union dept_emp and dept_manager first then join 
--- there are 24 duplicates from Union All thus dept_emp probably contains dept_manager
 
+-- union dept_emp and dept_manager first then join (without aliasing) 
+-- there are 24 duplicates from Union All thus dept_emp probably contains dept_manager, thus this union step technically isn't needed
 CREATE VIEW dept_emp_all AS
 	SELECT dept_no, emp_no FROM dept_emp
 	UNION
@@ -131,6 +135,7 @@ CREATE VIEW emp_dept_names AS
 	ORDER BY emp_no;
 
 -- check entries: employees has 300024 while emp_dept_names has 331603
+-- from duplicates above. We could remove duplicate entries
 SELECT
    COUNT(*)
 FROM
@@ -153,12 +158,54 @@ WHERE
 	last_name LIKE 'B%';
 	
 -- 6. List all employees in the Sales department, including their employee number, last name, first name, and department name.
--- d007 is Sales
-SELECT dept_no
-FROM departments
-WHERE dept_name = 'Sales';
--- get all employess in dept_emp that has dept_no of d007
+-- using the view saved above
+SELECT * 
+FROM emp_dept_names
+WHERE dept_name = 'Sales'
+ORDER BY emp_no;
+
+-- without using the saved views
+SELECT
+	employees.emp_no,
+	last_name,
+	first_name,
+	dept_name
+FROM
+	employees
+	INNER JOIN dept_emp ON employees.emp_no = dept_emp.emp_no
+	INNER JOIN departments ON departments.dept_no = dept_emp.dept_no
+WHERE
+	dept_name = 'Sales'
+ORDER BY emp_no;
 
 -- 7. List all employees in the Sales and Development departments, including their employee number, last name, first name, and department name.
+-- using the saved view
+SELECT * 
+FROM emp_dept_names
+WHERE dept_name in ('Sales','Development')
+ORDER BY emp_no;
+
+-- without using the saved views
+SELECT
+	employees.emp_no,
+	last_name,
+	first_name,
+	dept_name
+FROM
+	employees
+	INNER JOIN dept_emp ON employees.emp_no = dept_emp.emp_no
+	INNER JOIN departments ON departments.dept_no = dept_emp.dept_no
+WHERE
+	dept_name IN ('Sales','Development')
+ORDER BY emp_no;
 
 -- 8. In descending order, list the frequency count of employee last names, i.e., how many employees share each last name.
+SELECT 
+	last_name,
+   count(last_name) as frequency
+FROM 
+   employees
+GROUP BY 
+   last_name
+ORDER BY frequency DESC;
+
